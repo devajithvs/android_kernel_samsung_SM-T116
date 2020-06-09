@@ -53,14 +53,14 @@ cleanup(void)
 	close(fd_map);
 }
 
-static void __attribute__((noreturn))
+static void __attribute__((noreturn)) __attribute__((unused))
 fail_file(void)
 {
 	cleanup();
 	longjmp(jmpenv, SJ_FAIL);
 }
 
-static void __attribute__((noreturn))
+static void __attribute__((noreturn)) __attribute__((unused))
 succeed_file(void)
 {
 	cleanup();
