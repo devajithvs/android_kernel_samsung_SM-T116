@@ -939,7 +939,11 @@ static int hub_port_disable(struct usb_hub *hub, int port1, int set_state)
  */
 static void hub_port_logical_disconnect(struct usb_hub *hub, int port1)
 {
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	dev_info(hub->intfdev, "logical disconnect on port %d\n", port1);
+#else
 	dev_dbg(hub->intfdev, "logical disconnect on port %d\n", port1);
+#endif
 	hub_port_disable(hub, port1, 1);
 
 	/* FIXME let caller ask to power down the port:
@@ -1628,6 +1632,9 @@ static int hub_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_device *hdev;
 	struct usb_hub *hub;
+#ifdef CONFIG_USB_EXTERNAL_DETECT
+	struct usb_hcd *hcd;
+#endif
 
 	desc = intf->cur_altsetting;
 	hdev = interface_to_usbdev(intf);
@@ -1666,9 +1673,12 @@ static int hub_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	 *   of USB bus.
 	 */
 	pm_runtime_set_autosuspend_delay(&hdev->dev, 0);
-
-	/* Hubs have proper suspend/resume support. */
-	usb_enable_autosuspend(hdev);
+#ifdef CONFIG_USB_EXTERNAL_DETECT
+	hcd = bus_to_hcd(hdev->bus);
+	if (!hcd->no_suspend)
+		/* Hubs have proper suspend/resume support. */
+		usb_enable_autosuspend(hdev);
+#endif
 
 	if (hdev->level == MAX_TOPO_LEVEL) {
 		dev_err(&intf->dev,
@@ -4330,11 +4340,15 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 	struct usb_device *udev;
 	int status, i;
 	unsigned unit_load;
-
-	dev_dbg (hub_dev,
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	dev_info(hub_dev,
 		"port %d, status %04x, change %04x, %s\n",
 		port1, portstatus, portchange, portspeed(hub, portstatus));
-
+#else
+	dev_dbg(hub_dev,
+		"port %d, status %04x, change %04x, %s\n",
+		port1, portstatus, portchange, portspeed(hub, portstatus));
+#endif
 	if (hub->has_indicators) {
 		set_port_led(hub, port1, HUB_LED_AUTO);
 		hub->indicator[port1-1] = INDICATOR_AUTO;
@@ -4998,6 +5012,12 @@ static int descriptors_changed(struct usb_device *udev,
 	if (!changed && serial_len) {
 		length = usb_string(udev, udev->descriptor.iSerialNumber,
 				buf, serial_len);
+		if(length < 0)
+		{
+			dev_err(&udev->dev, "usb_string return error\n");
+			kfree(buf);
+			return 1;
+		}
 		if (length + 1 != serial_len) {
 			dev_dbg(&udev->dev, "serial string error %d\n",
 					length);
